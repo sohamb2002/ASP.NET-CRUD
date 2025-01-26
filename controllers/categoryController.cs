@@ -11,32 +11,31 @@ namespace asp_net_ecommerce_web_api.Controllers
         {
             new Category { CategoryId = Guid.NewGuid(), Name = "Category 1", Description = "This is Category 1", CreatedAt = DateTime.Now },
             new Category { CategoryId = Guid.NewGuid(), Name = "Category 2", Description = "This is Category 2", CreatedAt = DateTime.Now },
-            // Add more categories as needed for your application.
         };
 
         // GET: /api/categories
         [HttpGet]
         public IActionResult GetCategories([FromQuery] string? searchValue)
         {
+            var responseCategories = categories;
+
             if (!string.IsNullOrEmpty(searchValue))
             {
-                var searchedCategories = categories
+                responseCategories = categories
                     .Where(category => category?.Name?.Contains(searchValue, StringComparison.OrdinalIgnoreCase) == true)
                     .ToList();
-
-                return Ok(searchedCategories);
             }
 
-            return Ok(categories);
+            return Ok(new ApiResponse<List<Category>>(responseCategories, 200, "Categories fetched successfully."));
         }
 
         // POST: /api/categories
         [HttpPost]
-        public IActionResult CreateCategory([FromBody] Category categoryData)
+        public IActionResult CreateCategory([FromBody] CategoryCreateDto categoryData)
         {
             if (string.IsNullOrEmpty(categoryData.Name))
             {
-                return BadRequest("Name is required");
+                return BadRequest(new ApiResponse<string>(null, 400, "Name is required"));
             }
 
             var newCategory = new Category
@@ -49,7 +48,9 @@ namespace asp_net_ecommerce_web_api.Controllers
 
             categories.Add(newCategory);
 
-            return CreatedAtAction(nameof(GetCategories), new { id = newCategory.CategoryId }, newCategory);
+            return CreatedAtAction(nameof(GetCategories), 
+                new { id = newCategory.CategoryId }, 
+                new ApiResponse<Category>(newCategory, 201, "Category created successfully."));
         }
 
         // DELETE: /api/categories/{categoryId}
@@ -60,42 +61,37 @@ namespace asp_net_ecommerce_web_api.Controllers
 
             if (foundCategory == null)
             {
-                return NotFound(new { Message = "Category not found." });
+                return NotFound(new ApiResponse<string>(null, 404, "Category not found."));
             }
 
             categories.Remove(foundCategory);
-            return NoContent();
+            return Ok(new ApiResponse<string>("Category deleted successfully.", 200));
         }
 
-        // PUT: /api/categories
-      [HttpPut("{categoryId:guid}")]
-public IActionResult UpdateCategory(Guid categoryId, [FromBody] Category updatedCategory)
-{
-    // Find the category with the given ID
-    var foundCategory = categories.FirstOrDefault(category => category.CategoryId == categoryId);
+        // PUT: /api/categories/{categoryId}
+        [HttpPut("{categoryId:guid}")]
+        public IActionResult UpdateCategory(Guid categoryId, [FromBody] CategoryUpdateDto updatedCategory)
+        {
+            var foundCategory = categories.FirstOrDefault(category => category.CategoryId == categoryId);
 
-    if (foundCategory == null)
-    {
-        // Return 404 Not Found if the category doesn't exist
-        return NotFound(new { Message = "Category to update not found." });
-    }
+            if (foundCategory == null)
+            {
+                return NotFound(new ApiResponse<string>(null, 404, "Category to update not found."));
+            }
 
-    // Update the category's properties
-    if (!string.IsNullOrEmpty(updatedCategory.Name))
-    {
-        foundCategory.Name = updatedCategory.Name;
-    }
+            if (!string.IsNullOrEmpty(updatedCategory.Name))
+            {
+                foundCategory.Name = updatedCategory.Name;
+            }
 
-    if (!string.IsNullOrEmpty(updatedCategory.Description))
-    {
-        foundCategory.Description = updatedCategory.Description;
-    }
+            if (!string.IsNullOrEmpty(updatedCategory.Description))
+            {
+                foundCategory.Description = updatedCategory.Description;
+            }
 
-    foundCategory.CreatedAt = DateTime.Now; // Optionally update the timestamp
+            foundCategory.CreatedAt = DateTime.Now;
 
-    // Return the updated category
-    return Ok(foundCategory);
-}
-
+            return Ok(new ApiResponse<Category>(foundCategory, 200, "Category updated successfully."));
+        }
     }
 }
