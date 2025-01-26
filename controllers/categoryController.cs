@@ -1,41 +1,39 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using asp_net_ecommerce_web_api.Models;
 
 namespace asp_net_ecommerce_web_api.Controllers
 {
     [ApiController]
-    [Route("api/categories")] // Base route for all category-related actions
+    [Route("api/categories")]
     public class CategoryController : ControllerBase
     {
-        private static List<Category> categories = new List<Category>()
+        private readonly AppDbContext _context;
+
+        public CategoryController(AppDbContext context)
         {
-            new Category { CategoryId = Guid.NewGuid(), Name = "Category 1", Description = "This is Category 1", CreatedAt = DateTime.Now },
-            new Category { CategoryId = Guid.NewGuid(), Name = "Category 2", Description = "This is Category 2", CreatedAt = DateTime.Now },
-        };
+            _context = context;
+        }
 
         // GET: /api/categories
         [HttpGet]
-        public IActionResult GetCategories([FromQuery] string? searchValue)
+        public async Task<IActionResult> GetCategories([FromQuery] string? searchValue)
         {
-            var responseCategories = categories;
+            var categories = await _context.Categories
+                .Where(category => string.IsNullOrEmpty(searchValue) ||
+                                   EF.Functions.ILike(category.Name ?? "", $"%{searchValue}%"))
+                .ToListAsync();
 
-            if (!string.IsNullOrEmpty(searchValue))
-            {
-                responseCategories = categories
-                    .Where(category => category?.Name?.Contains(searchValue, StringComparison.OrdinalIgnoreCase) == true)
-                    .ToList();
-            }
-
-            return Ok(new ApiResponse<List<Category>>(responseCategories, 200, "Categories fetched successfully."));
+            return Ok(new ApiResponse<List<Category>>(categories, 200, "Categories fetched successfully."));
         }
 
         // POST: /api/categories
         [HttpPost]
-        public IActionResult CreateCategory([FromBody] CategoryCreateDto categoryData)
+        public async Task<IActionResult> CreateCategory([FromBody] CategoryCreateDto categoryData)
         {
             if (string.IsNullOrEmpty(categoryData.Name))
             {
-                return BadRequest(new ApiResponse<string>(null, 400, "Name is required"));
+                return BadRequest(new ApiResponse<string>(null, 400, "Name is required."));
             }
 
             var newCategory = new Category
@@ -46,33 +44,36 @@ namespace asp_net_ecommerce_web_api.Controllers
                 CreatedAt = DateTime.Now
             };
 
-            categories.Add(newCategory);
+            _context.Categories.Add(newCategory);
+            await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetCategories), 
-                new { id = newCategory.CategoryId }, 
+            return CreatedAtAction(nameof(GetCategories),
+                new { id = newCategory.CategoryId },
                 new ApiResponse<Category>(newCategory, 201, "Category created successfully."));
         }
 
         // DELETE: /api/categories/{categoryId}
         [HttpDelete("{categoryId:guid}")]
-        public IActionResult DeleteCategory(Guid categoryId)
+        public async Task<IActionResult> DeleteCategory(Guid categoryId)
         {
-            var foundCategory = categories.FirstOrDefault(category => category.CategoryId == categoryId);
+            var foundCategory = await _context.Categories.FindAsync(categoryId);
 
             if (foundCategory == null)
             {
                 return NotFound(new ApiResponse<string>(null, 404, "Category not found."));
             }
 
-            categories.Remove(foundCategory);
+            _context.Categories.Remove(foundCategory);
+            await _context.SaveChangesAsync();
+
             return Ok(new ApiResponse<string>("Category deleted successfully.", 200));
         }
 
         // PUT: /api/categories/{categoryId}
         [HttpPut("{categoryId:guid}")]
-        public IActionResult UpdateCategory(Guid categoryId, [FromBody] CategoryUpdateDto updatedCategory)
+        public async Task<IActionResult> UpdateCategory(Guid categoryId, [FromBody] CategoryUpdateDto updatedCategory)
         {
-            var foundCategory = categories.FirstOrDefault(category => category.CategoryId == categoryId);
+            var foundCategory = await _context.Categories.FindAsync(categoryId);
 
             if (foundCategory == null)
             {
@@ -90,6 +91,9 @@ namespace asp_net_ecommerce_web_api.Controllers
             }
 
             foundCategory.CreatedAt = DateTime.Now;
+
+            _context.Categories.Update(foundCategory);
+            await _context.SaveChangesAsync();
 
             return Ok(new ApiResponse<Category>(foundCategory, 200, "Category updated successfully."));
         }
